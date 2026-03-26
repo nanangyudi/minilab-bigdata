@@ -1,0 +1,12 @@
+timestamp,dataset_name,source_type,rows,status,notes
+2026-03-26T04:08:38.089433+00:00,customers_from_db,rdbms,0,FAILED,"(psycopg2.OperationalError) connection to server at ""localhost"" (::1), port 5432 failed: FATAL:  password authentication failed for user ""minilab""
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+2026-03-26T04:08:38.188150+00:00,customers_from_csv,csv,3,SUCCESS,OK
+2026-03-26T04:08:38.779536+00:00,products_from_xlsx,xlsx,3,SUCCESS,OK
+2026-03-26T04:18:04.880011+00:00,customers_from_db,rdbms,4,SUCCESS,OK
+2026-03-26T04:18:05.188670+00:00,customers_from_csv,csv,3,SUCCESS,OK
+2026-03-26T04:18:05.480875+00:00,products_from_xlsx,xlsx,3,SUCCESS,OK
+2026-03-26T04:18:36.463925+00:00,customers_from_db,rdbms,4,SUCCESS,OK
+2026-03-26T04:18:36.568273+00:00,customers_from_csv,csv,3,SUCCESS,OK
+2026-03-26T04:18:36.848111+00:00,products_from_xlsx,xlsx,3,SUCCESS,OK

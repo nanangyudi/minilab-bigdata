@@ -1,0 +1,5 @@
+endpoint: "localhost:9000"
+access_key: "minioadmin"
+secret_key: "minioadmin123"
+bucket: "datalake"
+secure: false

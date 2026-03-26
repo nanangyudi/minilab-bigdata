@@ -1,0 +1,24 @@
+rdbms:
+  type: postgres
+  host: localhost
+  port: 5432
+  database: minilabdb
+  username: minilab
+  password: minilab123
+  query: "SELECT * FROM customers"
+
+files:
+  csv_path: "data/input/csv/customers.csv"
+  xlsx_path: "data/input/xlsx/products.xlsx"
+
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin123"
+  bucket: "datalake"
+  secure: false
+
+targets:
+  raw_rdbms_object: "raw/rdbms/customers/customers_from_db.csv"
+  raw_csv_object: "raw/csv/customers/customers_from_csv.csv"
+  raw_xlsx_object: "raw/xlsx/products/products_from_xlsx.csv"

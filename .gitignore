@@ -1,0 +1,14 @@
+# Kredensial lokal — jangan di-commit
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
