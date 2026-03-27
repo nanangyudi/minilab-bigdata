@@ -13,6 +13,12 @@ rdbms:
       query: "SELECT * FROM orders"
       target: "raw/rdbms/orders/orders_from_db.csv"
 
+minio:
+  endpoint: "localhost:9000"
+  # access_key dan secret_key dibaca dari environment variable: MINIO_ROOT_USER, MINIO_ROOT_PASSWORD
+  bucket: "datalake"
+  secure: false
+
 files:
   - name: customers_from_csv
     source_type: csv
