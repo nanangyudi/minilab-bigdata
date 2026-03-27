@@ -5,19 +5,20 @@ rdbms:
   database: minilabdb
   username: minilab
   # password dibaca dari environment variable: POSTGRES_PASSWORD
-  query: "SELECT * FROM customers"
+  sources:
+    - name: customers_from_db
+      query: "SELECT * FROM customers"
+      target: "raw/rdbms/customers/customers_from_db.csv"
+    - name: orders_from_db
+      query: "SELECT * FROM orders"
+      target: "raw/rdbms/orders/orders_from_db.csv"
 
 files:
-  csv_path: "data/input/csv/customers.csv"
-  xlsx_path: "data/input/xlsx/products.xlsx"
-
-minio:
-  endpoint: "localhost:9000"
-  # access_key dan secret_key dibaca dari environment variable: MINIO_ROOT_USER, MINIO_ROOT_PASSWORD
-  bucket: "datalake"
-  secure: false
-
-targets:
-  raw_rdbms_object: "raw/rdbms/customers/customers_from_db.csv"
-  raw_csv_object: "raw/csv/customers/customers_from_csv.csv"
-  raw_xlsx_object: "raw/xlsx/products/products_from_xlsx.csv"
+  - name: customers_from_csv
+    source_type: csv
+    path: "data/input/csv/customers.csv"
+    target: "raw/csv/customers/customers_from_csv.csv"
+  - name: products_from_xlsx
+    source_type: xlsx
+    path: "data/input/xlsx/products.xlsx"
+    target: "raw/xlsx/products/products_from_xlsx.csv"
