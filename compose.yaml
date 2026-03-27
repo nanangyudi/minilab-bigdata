@@ -51,6 +51,28 @@ services:
       tail -f /dev/null
       "
 
+  # ----------------------------------------------------------------
+  # Tahap 2 — Analisis (aktif hanya dengan: docker compose --profile analysis up -d)
+  # ----------------------------------------------------------------
+  jupyter:
+    profiles: ["analysis"]
+    image: jupyter/pyspark-notebook:latest
+    container_name: minilab-jupyter
+    restart: unless-stopped
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ENDPOINT: "http://minio:9000"
+    volumes:
+      - .:/home/jovyan/work
+    depends_on:
+      minio:
+        condition: service_healthy
+    working_dir: /home/jovyan/work
+
 volumes:
   postgres_data:
   minio_data:
