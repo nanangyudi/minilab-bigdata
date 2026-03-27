@@ -15,9 +15,15 @@ from ingestion.storage_writer import upload_dataframe_as_csv
 from ingestion.logger import log_event
 
 
-def load_config(path: str = "config/sources.yaml") -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+def load_config(
+    sources_path: str = "config/sources.yaml",
+    minio_path: str = "config/minio.yaml",
+) -> tuple[dict, dict]:
+    with open(sources_path, "r", encoding="utf-8") as f:
+        sources = yaml.safe_load(f)
+    with open(minio_path, "r", encoding="utf-8") as f:
+        minio = yaml.safe_load(f)
+    return sources, minio
 
 
 def add_partition(object_name: str) -> str:
@@ -69,14 +75,14 @@ def run_ingestion(
 
 def main() -> None:
     load_dotenv()
-    cfg = load_config()
+    cfg, minio_raw = load_config()
 
     minio_cfg = {
-        "endpoint": cfg["minio"]["endpoint"],
+        "endpoint": minio_raw["endpoint"],
         "access_key": os.environ["MINIO_ROOT_USER"],
         "secret_key": os.environ["MINIO_ROOT_PASSWORD"],
-        "bucket": cfg["minio"]["bucket"],
-        "secure": cfg["minio"]["secure"],
+        "bucket": minio_raw["bucket"],
+        "secure": minio_raw["secure"],
     }
 
     rdbms_cfg = cfg["rdbms"]
