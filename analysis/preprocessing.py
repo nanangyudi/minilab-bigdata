@@ -84,8 +84,9 @@ def build_transaction_items(df_orders: DataFrame, df_products: DataFrame) -> Dat
         how="left",
     )
 
+    # collect_set digunakan agar tidak ada duplikat item per transaksi
     df_transactions = df_with_name.groupBy("customer_id").agg(
-        F.collect_list("product_name").alias("items")
+        F.collect_set("product_name").alias("items")
     )
 
     return df_transactions

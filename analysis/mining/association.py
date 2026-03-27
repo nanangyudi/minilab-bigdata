@@ -7,7 +7,7 @@ from pyspark.ml.fpm import FPGrowth
 def run_fpgrowth(
     df_transactions: DataFrame,
     items_col: str = "items",
-    min_support: float = 0.2,
+    min_support: float = 0.1,
     min_confidence: float = 0.5,
 ) -> tuple[DataFrame, DataFrame]:
     """Jalankan FP-Growth untuk menemukan association rules.
@@ -23,7 +23,7 @@ def run_fpgrowth(
         df_rules      : association rules (antecedent → consequent, confidence, lift)
 
     Contoh penggunaan:
-        df_freq, df_rules = run_fpgrowth(df_transactions, min_support=0.2, min_confidence=0.5)
+        df_freq, df_rules = run_fpgrowth(df_transactions, min_support=0.1, min_confidence=0.5)
         df_rules.orderBy("lift", ascending=False).show(truncate=False)
 
     Interpretasi kolom rules:
