@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+from typing import Callable
+
 import yaml
+from dotenv import load_dotenv
 
 from ingestion.rdbms_extractor import extract_from_postgres
 from ingestion.file_reader import read_csv_file, read_xlsx_file
@@ -15,79 +19,85 @@ def load_config(path: str = "config/sources.yaml") -> dict:
         return yaml.safe_load(f)
 
 
+def run_ingestion(
+    name: str,
+    source_type: str,
+    extract_fn: Callable,
+    object_name: str,
+    minio_cfg: dict,
+) -> None:
+    """Jalankan satu siklus ingestion: extract → validate → standardize → upload → log."""
+    try:
+        df = extract_fn()
+        warnings, is_valid = validate_dataframe(df, name)
+
+        if not is_valid:
+            log_event(name, source_type, 0, "REJECTED", " | ".join(warnings))
+            print(f"[REJECTED] {name}: data ditolak karena tidak memenuhi threshold kualitas.")
+            return
+
+        df = standardize_columns(df, source_type)
+        upload_dataframe_as_csv(
+            df=df,
+            endpoint=minio_cfg["endpoint"],
+            access_key=minio_cfg["access_key"],
+            secret_key=minio_cfg["secret_key"],
+            bucket=minio_cfg["bucket"],
+            object_name=object_name,
+            secure=minio_cfg["secure"],
+        )
+        log_event(name, source_type, len(df), "SUCCESS", " | ".join(warnings) if warnings else "OK")
+        print(f"[OK] {name}: ingestion berhasil ({len(df)} baris).")
+
+    except Exception as e:
+        log_event(name, source_type, 0, "FAILED", str(e))
+        print(f"[ERROR] {name}: ingestion gagal — {e}")
+
+
 def main() -> None:
+    load_dotenv()
     cfg = load_config()
 
-    minio_cfg = cfg["minio"]
+    minio_cfg = {
+        "endpoint": cfg["minio"]["endpoint"],
+        "access_key": os.environ["MINIO_ROOT_USER"],
+        "secret_key": os.environ["MINIO_ROOT_PASSWORD"],
+        "bucket": cfg["minio"]["bucket"],
+        "secure": cfg["minio"]["secure"],
+    }
     targets = cfg["targets"]
+    rdbms_cfg = cfg["rdbms"]
 
-    # RDBMS ingestion
-    try:
-        rdbms_cfg = cfg["rdbms"]
-        df_db = extract_from_postgres(
+    run_ingestion(
+        name="customers_from_db",
+        source_type="rdbms",
+        extract_fn=lambda: extract_from_postgres(
             host=rdbms_cfg["host"],
             port=rdbms_cfg["port"],
             database=rdbms_cfg["database"],
             username=rdbms_cfg["username"],
-            password=rdbms_cfg["password"],
+            password=os.environ["POSTGRES_PASSWORD"],
             query=rdbms_cfg["query"],
-        )
-        warnings = validate_dataframe(df_db, "rdbms_customers")
-        df_db = standardize_columns(df_db, "rdbms")
-        upload_dataframe_as_csv(
-            df=df_db,
-            endpoint=minio_cfg["endpoint"],
-            access_key=minio_cfg["access_key"],
-            secret_key=minio_cfg["secret_key"],
-            bucket=minio_cfg["bucket"],
-            object_name=targets["raw_rdbms_object"],
-            secure=minio_cfg["secure"],
-        )
-        log_event("customers_from_db", "rdbms", len(df_db), "SUCCESS", " | ".join(warnings) if warnings else "OK")
-        print("RDBMS ingestion berhasil.")
-    except Exception as e:
-        log_event("customers_from_db", "rdbms", 0, "FAILED", str(e))
-        print(f"RDBMS ingestion gagal: {e}")
+        ),
+        object_name=targets["raw_rdbms_object"],
+        minio_cfg=minio_cfg,
+    )
 
-    # CSV ingestion
-    try:
-        df_csv = read_csv_file(cfg["files"]["csv_path"])
-        warnings = validate_dataframe(df_csv, "csv_customers")
-        df_csv = standardize_columns(df_csv, "csv")
-        upload_dataframe_as_csv(
-            df=df_csv,
-            endpoint=minio_cfg["endpoint"],
-            access_key=minio_cfg["access_key"],
-            secret_key=minio_cfg["secret_key"],
-            bucket=minio_cfg["bucket"],
-            object_name=targets["raw_csv_object"],
-            secure=minio_cfg["secure"],
-        )
-        log_event("customers_from_csv", "csv", len(df_csv), "SUCCESS", " | ".join(warnings) if warnings else "OK")
-        print("CSV ingestion berhasil.")
-    except Exception as e:
-        log_event("customers_from_csv", "csv", 0, "FAILED", str(e))
-        print(f"CSV ingestion gagal: {e}")
+    run_ingestion(
+        name="customers_from_csv",
+        source_type="csv",
+        extract_fn=lambda: read_csv_file(cfg["files"]["csv_path"]),
+        object_name=targets["raw_csv_object"],
+        minio_cfg=minio_cfg,
+    )
 
-    # XLSX ingestion
-    try:
-        df_xlsx = read_xlsx_file(cfg["files"]["xlsx_path"])
-        warnings = validate_dataframe(df_xlsx, "xlsx_products")
-        df_xlsx = standardize_columns(df_xlsx, "xlsx")
-        upload_dataframe_as_csv(
-            df=df_xlsx,
-            endpoint=minio_cfg["endpoint"],
-            access_key=minio_cfg["access_key"],
-            secret_key=minio_cfg["secret_key"],
-            bucket=minio_cfg["bucket"],
-            object_name=targets["raw_xlsx_object"],
-            secure=minio_cfg["secure"],
-        )
-        log_event("products_from_xlsx", "xlsx", len(df_xlsx), "SUCCESS", " | ".join(warnings) if warnings else "OK")
-        print("XLSX ingestion berhasil.")
-    except Exception as e:
-        log_event("products_from_xlsx", "xlsx", 0, "FAILED", str(e))
-        print(f"XLSX ingestion gagal: {e}")
+    run_ingestion(
+        name="products_from_xlsx",
+        source_type="xlsx",
+        extract_fn=lambda: read_xlsx_file(cfg["files"]["xlsx_path"]),
+        object_name=targets["raw_xlsx_object"],
+        minio_cfg=minio_cfg,
+    )
 
 
 if __name__ == "__main__":

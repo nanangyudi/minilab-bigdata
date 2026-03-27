@@ -4,7 +4,7 @@ rdbms:
   port: 5432
   database: minilabdb
   username: minilab
-  password: minilab123
+  # password dibaca dari environment variable: POSTGRES_PASSWORD
   query: "SELECT * FROM customers"
 
 files:
@@ -13,8 +13,7 @@ files:
 
 minio:
   endpoint: "localhost:9000"
-  access_key: "minioadmin"
-  secret_key: "minioadmin123"
+  # access_key dan secret_key dibaca dari environment variable: MINIO_ROOT_USER, MINIO_ROOT_PASSWORD
   bucket: "datalake"
   secure: false
 
