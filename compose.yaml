@@ -72,6 +72,9 @@ services:
       minio:
         condition: service_healthy
     working_dir: /home/jovyan/work
+    command: >
+      bash -c "pip install -r /home/jovyan/work/analysis-requirements.txt -q
+      && start-notebook.sh"
 
 volumes:
   postgres_data:
