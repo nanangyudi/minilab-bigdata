@@ -1,5 +1,4 @@
 endpoint: "localhost:9000"
-access_key: "minioadmin"
-secret_key: "minioadmin123"
+# access_key dan secret_key dibaca dari environment variable: MINIO_ROOT_USER, MINIO_ROOT_PASSWORD
 bucket: "datalake"
 secure: false
