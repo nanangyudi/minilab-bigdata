@@ -1,146 +1,215 @@
-# Minilab Big Data - Tahap 1
+# Minilab Big Data — Tahap 1 (Perbaikan Selesai)
 
-Paket ini disiapkan untuk assignment deployment minilab big data sampai tahap **ingestion data ke MinIO** (zona `raw/`).
+Paket ini menyiapkan lingkungan minilab big data lokal untuk pembelajaran **data ingestion ke MinIO** (zona `raw/`). Semua perbaikan fondasi (P1–P3) telah diimplementasikan dan siap dilanjutkan ke Tahap 2 (Spark & Data Mining).
 
 ## Komponen
 
-- **PostgreSQL** — sumber data RDBMS (diinisialisasi dari `data/sample_sql/`)
-- **MinIO** — object storage / data lake
-- **minio/mc** — membuat bucket otomatis saat stack naik
-- **Skrip Python** (`ingestion/`) — ekstraksi, validasi ringan, unggah CSV ke MinIO
+| Komponen | Peran |
+|----------|-------|
+| **PostgreSQL** | Sumber data RDBMS — tabel `customers`, `products`, `orders` |
+| **MinIO** | Object storage / data lake |
+| **minio/mc** | Membuat bucket otomatis saat stack naik |
+| **Skrip Python** (`ingestion/`) | Ekstraksi, validasi, standardisasi, unggah CSV ke MinIO |
+| **Unit Test** (`tests/`) | Verifikasi modul `validator` dan `standardizer` |
 
 ## Prasyarat
 
 - **Docker Desktop** (Windows/macOS) atau Docker Engine + Compose (Linux), **daemon harus berjalan** sebelum `docker compose up`.
-- **Python 3.10+** (disarankan) untuk virtualenv lokal.
-- Port **tidak digunakan proses lain** pada **5432** (PostgreSQL), **9000** (MinIO API), **9001** (MinIO Console) — atau ubah mapping di `.env` (lihat [Konflik port](#konflik-port)).
+- **Python 3.10+** untuk virtualenv lokal.
+- Port **tidak digunakan proses lain** pada **5432** (PostgreSQL), **9000** (MinIO API), **9001** (MinIO Console) — atau ubah mapping di `.env`.
 
-## Konfigurasi (penting agar tidak salah koneksi)
+## Konfigurasi
 
-- **`.env`** — dipakai oleh `compose.yaml` (kredensial & port Postgres/MinIO, nama bucket). File ini **tidak di-commit** (lihat `.gitignore`). Template aman untuk disalin: **`.env.example`**.
-- **`config/sources.yaml`** — dipakai skrip ingestion (host/port DB, path file CSV/XLSX, target path di MinIO).
+### File konfigurasi
 
-**Pertama kali / setelah clone:** salin template ke `.env`, lalu sesuaikan jika perlu.
+| File | Isi | Dipakai oleh |
+|------|-----|--------------|
+| `.env` | Kredensial & port (tidak di-commit) | Docker Compose + pipeline ingestion |
+| `config/sources.yaml` | Sumber data RDBMS & file, target path MinIO | `ingestion/main_ingest.py` |
+| `config/minio.yaml` | Endpoint, bucket, mode secure MinIO | `ingestion/main_ingest.py` |
+
+> **Kredensial hanya di `.env`** — `sources.yaml` dan `minio.yaml` tidak lagi menyimpan password atau secret key. Pipeline membaca `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` langsung dari environment.
+
+### Pertama kali / setelah clone
 
 ```bash
 # Linux / macOS
 cp .env.example .env
-```
 
-```powershell
 # Windows (PowerShell)
 Copy-Item .env.example .env
 ```
 
-**Kredensial PostgreSQL dan MinIO di kedua file harus konsisten** (user, password, database, bucket, port Postgres ke host). Jika Anda mengubah `.env`, sesuaikan juga `config/sources.yaml` untuk bagian `rdbms` dan `minio`.
+Edit `.env` jika perlu mengubah password, port, atau nama bucket. Tidak perlu menyesuaikan file konfigurasi lain.
 
-Path file sumber ada di `config/sources.yaml` (`files.csv_path`, `files.xlsx_path`). Pastikan file tersebut ada sebelum menjalankan ingestion, atau sesuaikan path-nya.
-
-## Menjalankan services (Docker)
-
-Dari root folder proyek ini:
+## Menjalankan Stack (Docker)
 
 ```bash
+# Jalankan semua layanan
 docker compose up -d
-```
 
-Cek status (sebaiknya `postgres` dan `minio` **healthy**):
-
-```bash
+# Cek status — tunggu postgres dan minio berstatus healthy
 docker compose ps
 ```
 
-## Virtualenv dan dependency (wajib sebelum ingestion)
+> Jika mereset database (misalnya setelah ubah `init.sql`), jalankan `docker compose down -v` terlebih dahulu agar volume lama terhapus dan data baru terbaca.
 
-Skrip membutuhkan paket di `requirements.txt`. Tanpa instalasi ini akan muncul error semacam `ModuleNotFoundError: No module named 'minio'`.
+## Virtualenv dan Dependency
 
 ```bash
 python -m venv .venv
 ```
 
 **Windows (PowerShell)**
-
 ```powershell
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-Jika aktivasi skrip diblokir kebijakan eksekusi, gunakan Python dari venv tanpa activate:
-
+Jika aktivasi skrip diblokir kebijakan eksekusi:
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m ingestion.main_ingest
 ```
 
 **Linux / macOS**
-
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Jalankan ingestion
+## Menjalankan Ingestion
 
-Pastikan container sudah jalan dan **Postgres dapat diakses dari host** pada port yang sama dengan di `config/sources.yaml` (`rdbms.port`).
+Pastikan container sudah berjalan dan healthy, kemudian:
 
 ```bash
 python -m ingestion.main_ingest
 ```
 
-## Akses layanan
+Pipeline akan memproses 4 sumber data secara berurutan:
 
-| Layanan | Alamat (default dari `.env`) |
-|--------|-------------------------------|
-| PostgreSQL | `localhost:5432` |
-| MinIO API | `http://localhost:9000` |
-| MinIO Console | `http://localhost:9001` |
+| Sumber | Tipe | Dataset |
+|--------|------|---------|
+| `customers_from_db` | RDBMS | Tabel `customers` (30 baris) |
+| `orders_from_db` | RDBMS | Tabel `orders` (63 baris) |
+| `customers_from_csv` | CSV | `data/input/csv/customers.csv` (25 baris) |
+| `products_from_xlsx` | XLSX | `data/input/xlsx/products.xlsx` (15 baris) |
 
-Nilai pastinya (user, password, port) mengikuti `.env` Anda.
+Status setiap sumber: `SUCCESS` / `REJECTED` / `FAILED`.
 
-## Verifikasi hasil
+## Menjalankan Unit Test
 
-1. **`logs/ingestion_log.csv`** — status per dataset (`SUCCESS` / `FAILED`) dan jumlah baris.
-2. **MinIO Console** → bucket (default `datalake`) → prefix `raw/rdbms/`, `raw/csv/`, `raw/xlsx/` — berisi object CSV.
-3. Jika preview di UI MinIO tidak tersedia, **unduh object** atau gunakan `mc` di container:  
-   `docker compose exec mc mc cat local/<nama-bucket>/<path-object>.csv`
+```bash
+python -m pytest tests/ -v
+```
 
-## Struktur output MinIO
+18 test mencakup modul `validator` dan `standardizer`.
 
-- `raw/rdbms/...`
-- `raw/csv/...`
-- `raw/xlsx/...`
+## Akses Layanan
 
-Setiap CSV menyertakan kolom tambahan `source_type` dan `ingestion_time` (lihat `ingestion/standardizer.py`).
+| Layanan | Alamat (default) | Kredensial (default) |
+|---------|-----------------|----------------------|
+| PostgreSQL | `localhost:5432` | `minilab` / `minilab123` |
+| MinIO API | `http://localhost:9000` | — |
+| MinIO Console | `http://localhost:9001` | `minioadmin` / `minioadmin123` |
+
+Nilai pastinya mengikuti `.env` Anda.
+
+## Verifikasi Hasil
+
+**Log eksekusi:**
+```bash
+cat logs/ingestion_log.csv
+```
+
+**Cek isi MinIO via terminal:**
+```bash
+# List semua objek
+docker exec minilab-mc mc ls local/datalake --recursive
+
+# Lihat isi file
+docker exec minilab-mc mc cat local/datalake/raw/rdbms/customers/<tanggal>/customers_from_db.csv
+```
+
+**MinIO Console:** buka `http://localhost:9001` → bucket `datalake`.
+
+## Struktur Output MinIO
+
+Setiap run ingestion menyimpan ke sub-folder bertanggal agar tidak menimpa data lama:
+
+```
+datalake/
+└── raw/
+    ├── rdbms/
+    │   ├── customers/<YYYY-MM-DD>/customers_from_db.csv
+    │   └── orders/<YYYY-MM-DD>/orders_from_db.csv
+    ├── csv/
+    │   └── customers/<YYYY-MM-DD>/customers_from_csv.csv
+    └── xlsx/
+        └── products/<YYYY-MM-DD>/products_from_xlsx.csv
+```
+
+Setiap CSV menyertakan kolom tambahan `source_type` dan `ingestion_time`.
+
+## Struktur Proyek
+
+```
+minilab-bigdata/
+├── compose.yaml                  # Docker Compose
+├── requirements.txt              # Dependensi Python
+├── .env.example                  # Template environment variable
+├── config/
+│   ├── sources.yaml              # Sumber data (RDBMS & file)
+│   └── minio.yaml                # Konfigurasi MinIO
+├── data/
+│   ├── sample_sql/init.sql       # Inisialisasi PostgreSQL
+│   └── input/
+│       ├── csv/customers.csv
+│       └── xlsx/products.xlsx
+├── ingestion/
+│   ├── main_ingest.py            # Orkestrasi pipeline
+│   ├── rdbms_extractor.py        # Ekstraksi PostgreSQL
+│   ├── file_reader.py            # Baca CSV / XLSX
+│   ├── validator.py              # Validasi kualitas data
+│   ├── standardizer.py           # Normalisasi kolom + metadata
+│   ├── storage_writer.py         # Upload ke MinIO
+│   └── logger.py                 # Log eksekusi
+├── logs/
+│   └── ingestion_log.csv
+├── notebooks/
+│   └── 01_ingestion_demo.ipynb
+└── tests/
+    ├── test_validator.py         # 10 unit test validator
+    └── test_standardizer.py     # 8 unit test standardizer
+```
 
 ## Troubleshooting
 
-### `password authentication failed for user "minilab"` (dari skrip Python), tetapi container Postgres sehat
+### `password authentication failed for user "minilab"`
 
-Sering terjadi jika **PostgreSQL terpisah di Windows** (atau layanan lain) masih **mendengarkan port 5432**, sehingga koneksi dari host ke `localhost:5432` **bukan** ke container.
+Biasanya karena PostgreSQL di OS host masih mendengarkan port 5432.
 
-- **Solusi A:** hentikan layanan PostgreSQL di OS (Services / `services.msc`) lalu jalankan ulang ingestion.
-- **Solusi B:** ubah **`POSTGRES_PORT`** di `.env` (misalnya `5433`), jalankan `docker compose down` lalu `docker compose up -d`, dan samakan **`port`** di `config/sources.yaml` → `rdbms`.
+- **Solusi A:** hentikan layanan PostgreSQL di OS → jalankan ulang ingestion.
+- **Solusi B:** ubah `POSTGRES_PORT` di `.env` (misal `5433`) → `docker compose down` → `docker compose up -d`.
 
-Untuk memastikan kredensial di container benar:
-
+Verifikasi kredensial di container:
 ```bash
-docker compose exec -e PGPASSWORD=<password-dari-.env> postgres psql -U minilab -d minilabdb -c "SELECT 1;"
+docker compose exec -e PGPASSWORD=<password> postgres psql -U minilab -d minilabdb -c "SELECT 1;"
 ```
 
-### `ModuleNotFoundError` (misalnya `minio`, `pandas`)
+### `ModuleNotFoundError`
 
-Gunakan venv yang sudah `pip install -r requirements.txt`, atau perintah `.\.venv\Scripts\python.exe -m ingestion.main_ingest` di Windows.
+Aktifkan virtualenv dan pastikan sudah `pip install -r requirements.txt`.
 
-### Ingestion XLSX gagal (file tidak ditemukan)
+### `KeyError` saat ingestion
 
-Pastikan file ada di path yang tertulis di `config/sources.yaml` (`files.xlsx_path`), atau ubah path tersebut ke lokasi file Anda.
+Pastikan `.env` sudah ada (salin dari `.env.example`). Pipeline membaca variabel `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` dari file ini.
 
 ### Port sudah dipakai
 
-Sesuaikan variabel port di `.env` untuk Postgres dan/atau MinIO, lalu `docker compose down` dan `docker compose up -d` lagi. Jangan lupa menyesuaikan `config/sources.yaml` untuk Postgres dan MinIO jika port API MinIO berubah.
+Ubah variabel port di `.env`, lalu `docker compose down` dan `docker compose up -d`.
 
 ## Catatan
 
-- **Spark** dan zona `processed/` / `feature_store/` belum menjadi bagian tahap ini.
-- Gunakan **`.env.example`** sebagai acuan; kerja aktual di **`.env`** (di-ignore git). Jika `.env` pernah ter-track sebelum ada `.gitignore`, hapus dari index dengan `git rm --cached .env` agar secret tidak ikut ter-push.
-- Jika ada error saat praktikum, catat pesan error, penyebab, dan solusi/workaround untuk bahan laporan.
+- **Tahap 2 (Spark & Data Mining)** belum dimulai. Dataset yang ada (`customers`, `products`, `orders`) sudah dirancang untuk mendukung klasifikasi, clustering, dan association rules.
+- `.env` tidak di-commit (ada di `.gitignore`). Jika pernah ter-track, jalankan `git rm --cached .env`.
