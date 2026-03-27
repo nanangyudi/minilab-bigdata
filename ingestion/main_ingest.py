@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Callable
 
 import yaml
@@ -17,6 +18,18 @@ from ingestion.logger import log_event
 def load_config(path: str = "config/sources.yaml") -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def add_partition(object_name: str) -> str:
+    """Sisipkan partisi tanggal sebelum nama file.
+
+    Contoh:
+        raw/rdbms/customers/customers_from_db.csv
+        -> raw/rdbms/customers/2026-03-27/customers_from_db.csv
+    """
+    partition = date.today().isoformat()
+    base, filename = object_name.rsplit("/", 1)
+    return f"{base}/{partition}/{filename}"
 
 
 def run_ingestion(
@@ -43,7 +56,7 @@ def run_ingestion(
             access_key=minio_cfg["access_key"],
             secret_key=minio_cfg["secret_key"],
             bucket=minio_cfg["bucket"],
-            object_name=object_name,
+            object_name=add_partition(object_name),
             secure=minio_cfg["secure"],
         )
         log_event(name, source_type, len(df), "SUCCESS", " | ".join(warnings) if warnings else "OK")
@@ -65,39 +78,33 @@ def main() -> None:
         "bucket": cfg["minio"]["bucket"],
         "secure": cfg["minio"]["secure"],
     }
-    targets = cfg["targets"]
+
     rdbms_cfg = cfg["rdbms"]
+    for src in rdbms_cfg["sources"]:
+        run_ingestion(
+            name=src["name"],
+            source_type="rdbms",
+            extract_fn=lambda q=src["query"]: extract_from_postgres(
+                host=rdbms_cfg["host"],
+                port=rdbms_cfg["port"],
+                database=rdbms_cfg["database"],
+                username=rdbms_cfg["username"],
+                password=os.environ["POSTGRES_PASSWORD"],
+                query=q,
+            ),
+            object_name=src["target"],
+            minio_cfg=minio_cfg,
+        )
 
-    run_ingestion(
-        name="customers_from_db",
-        source_type="rdbms",
-        extract_fn=lambda: extract_from_postgres(
-            host=rdbms_cfg["host"],
-            port=rdbms_cfg["port"],
-            database=rdbms_cfg["database"],
-            username=rdbms_cfg["username"],
-            password=os.environ["POSTGRES_PASSWORD"],
-            query=rdbms_cfg["query"],
-        ),
-        object_name=targets["raw_rdbms_object"],
-        minio_cfg=minio_cfg,
-    )
-
-    run_ingestion(
-        name="customers_from_csv",
-        source_type="csv",
-        extract_fn=lambda: read_csv_file(cfg["files"]["csv_path"]),
-        object_name=targets["raw_csv_object"],
-        minio_cfg=minio_cfg,
-    )
-
-    run_ingestion(
-        name="products_from_xlsx",
-        source_type="xlsx",
-        extract_fn=lambda: read_xlsx_file(cfg["files"]["xlsx_path"]),
-        object_name=targets["raw_xlsx_object"],
-        minio_cfg=minio_cfg,
-    )
+    readers = {"csv": read_csv_file, "xlsx": read_xlsx_file}
+    for src in cfg["files"]:
+        run_ingestion(
+            name=src["name"],
+            source_type=src["source_type"],
+            extract_fn=lambda p=src["path"], t=src["source_type"]: readers[t](p),
+            object_name=src["target"],
+            minio_cfg=minio_cfg,
+        )
 
 
 if __name__ == "__main__":
