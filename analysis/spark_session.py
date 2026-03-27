@@ -20,6 +20,10 @@ def create_spark_session(app_name: str = "Minilab Big Data") -> SparkSession:
         SparkSession.builder
         .appName(app_name)
         .master("local[*]")
+        # JAR hadoop-aws + aws-sdk diunduh otomatis dari Maven Central saat pertama kali dijalankan
+        .config("spark.jars.packages",
+                "org.apache.hadoop:hadoop-aws:3.3.4,"
+                "com.amazonaws:aws-java-sdk-bundle:1.12.262")
         # Konfigurasi S3A untuk MinIO
         .config("spark.hadoop.fs.s3a.endpoint", endpoint)
         .config("spark.hadoop.fs.s3a.access.key", access_key)
