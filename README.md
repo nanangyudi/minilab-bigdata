@@ -1,22 +1,35 @@
-# Minilab Big Data — Tahap 1 (Perbaikan Selesai)
+# Minilab Big Data & Analitik
 
-Paket ini menyiapkan lingkungan minilab big data lokal untuk pembelajaran **data ingestion ke MinIO** (zona `raw/`). Semua perbaikan fondasi (P1–P3) telah diimplementasikan dan siap dilanjutkan ke Tahap 2 (Spark & Data Mining).
+Proyek minilab untuk pembelajaran **Big Data dan Analitik** — mencakup dua tahap penuh:
+
+| Tahap | Topik | Status |
+|-------|-------|--------|
+| **Tahap 1** | Data Ingestion ke MinIO (zona `raw/`) | ✅ Selesai |
+| **Tahap 2** | Analisis Data dengan Spark & Data Mining | ✅ Selesai |
+
+---
 
 ## Komponen
 
 | Komponen | Peran |
 |----------|-------|
 | **PostgreSQL** | Sumber data RDBMS — tabel `customers`, `products`, `orders` |
-| **MinIO** | Object storage / data lake |
+| **MinIO** | Object storage / data lake (zona `raw/` dan `processed/`) |
 | **minio/mc** | Membuat bucket otomatis saat stack naik |
 | **Skrip Python** (`ingestion/`) | Ekstraksi, validasi, standardisasi, unggah CSV ke MinIO |
+| **Modul PySpark** (`analysis/`) | Feature engineering, K-Means, Decision Tree, FP-Growth |
+| **JupyterLab** | Antarmuka notebook untuk eksplorasi & analisis |
 | **Unit Test** (`tests/`) | Verifikasi modul `validator` dan `standardizer` |
+
+---
 
 ## Prasyarat
 
 - **Docker Desktop** (Windows/macOS) atau Docker Engine + Compose (Linux), **daemon harus berjalan** sebelum `docker compose up`.
-- **Python 3.10+** untuk virtualenv lokal.
-- Port **tidak digunakan proses lain** pada **5432** (PostgreSQL), **9000** (MinIO API), **9001** (MinIO Console) — atau ubah mapping di `.env`.
+- **Python 3.10+** untuk virtualenv lokal (Tahap 1).
+- Port **tidak digunakan proses lain** pada **5432** (PostgreSQL), **9000** (MinIO API), **9001** (MinIO Console), **8888** (JupyterLab) — atau ubah mapping di `.env`.
+
+---
 
 ## Konfigurasi
 
@@ -24,11 +37,11 @@ Paket ini menyiapkan lingkungan minilab big data lokal untuk pembelajaran **data
 
 | File | Isi | Dipakai oleh |
 |------|-----|--------------|
-| `.env` | Kredensial & port (tidak di-commit) | Docker Compose + pipeline ingestion |
+| `.env` | Kredensial & port (tidak di-commit) | Docker Compose + pipeline |
 | `config/sources.yaml` | Sumber data RDBMS & file, target path MinIO | `ingestion/main_ingest.py` |
 | `config/minio.yaml` | Endpoint, bucket, mode secure MinIO | `ingestion/main_ingest.py` |
 
-> **Kredensial hanya di `.env`** — `sources.yaml` dan `minio.yaml` tidak lagi menyimpan password atau secret key. Pipeline membaca `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` langsung dari environment.
+> **Kredensial hanya di `.env`** — `sources.yaml` dan `minio.yaml` tidak menyimpan password atau secret key. Pipeline membaca `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` langsung dari environment.
 
 ### Pertama kali / setelah clone
 
@@ -40,21 +53,37 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Edit `.env` jika perlu mengubah password, port, atau nama bucket. Tidak perlu menyesuaikan file konfigurasi lain.
+Edit `.env` jika perlu mengubah password, port, atau nama bucket.
+
+---
 
 ## Menjalankan Stack (Docker)
 
-```bash
-# Jalankan semua layanan
-docker compose up -d
+### Tahap 1 saja (PostgreSQL + MinIO)
 
-# Cek status — tunggu postgres dan minio berstatus healthy
-docker compose ps
+```bash
+docker compose up -d
+docker compose ps   # tunggu postgres dan minio berstatus healthy
 ```
 
-> Jika mereset database (misalnya setelah ubah `init.sql`), jalankan `docker compose down -v` terlebih dahulu agar volume lama terhapus dan data baru terbaca.
+### Tahap 1 + Tahap 2 (+ JupyterLab/PySpark)
 
-## Virtualenv dan Dependency
+```bash
+docker compose --profile analysis up -d
+```
+
+| Service | Profile | Image | Port |
+|---------|---------|-------|------|
+| postgres | *(selalu)* | postgres:16 | 5432 |
+| minio | *(selalu)* | minio/minio | 9000, 9001 |
+| mc | *(selalu)* | minio/mc | — |
+| **jupyter** | **analysis** | **jupyter/pyspark-notebook** | **8888** |
+
+> Untuk mereset database (misalnya setelah ubah `init.sql`), jalankan `docker compose down -v` terlebih dahulu.
+
+---
+
+## Virtualenv dan Dependency (Tahap 1)
 
 ```bash
 python -m venv .venv
@@ -78,7 +107,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Menjalankan Ingestion
+---
+
+## Menjalankan Ingestion (Tahap 1)
 
 Pastikan container sudah berjalan dan healthy, kemudian:
 
@@ -86,7 +117,7 @@ Pastikan container sudah berjalan dan healthy, kemudian:
 python -m ingestion.main_ingest
 ```
 
-Pipeline akan memproses 4 sumber data secara berurutan:
+Pipeline memproses 4 sumber data secara berurutan:
 
 | Sumber | Tipe | Dataset |
 |--------|------|---------|
@@ -97,6 +128,8 @@ Pipeline akan memproses 4 sumber data secara berurutan:
 
 Status setiap sumber: `SUCCESS` / `REJECTED` / `FAILED`.
 
+---
+
 ## Menjalankan Unit Test
 
 ```bash
@@ -105,6 +138,48 @@ python -m pytest tests/ -v
 
 18 test mencakup modul `validator` dan `standardizer`.
 
+---
+
+## Menjalankan Analisis (Tahap 2)
+
+### 1. Pastikan data sudah ada di MinIO
+
+```bash
+python -m ingestion.main_ingest
+```
+
+### 2. Jalankan JupyterLab
+
+```bash
+docker compose --profile analysis up -d
+```
+
+### 3. Dapatkan token akses
+
+```bash
+# Linux / macOS
+docker logs minilab-jupyter 2>&1 | grep token
+
+# Windows (PowerShell)
+docker logs minilab-jupyter 2>&1 | Select-String "token"
+```
+
+Salin URL yang mengandung `token=...` dan buka di browser: `http://localhost:8888`
+
+### 4. Urutan notebook
+
+```
+work/notebooks/
+├── 02_eda_spark.ipynb           → EDA + simpan processed/customer_features/
+├── 03_clustering.ipynb          → K-Means segmentasi pelanggan
+├── 04_classification.ipynb      → Decision Tree prediksi is_high_value
+└── 05_association_rules.ipynb   → FP-Growth pola pembelian
+```
+
+> Notebook 02 harus dijalankan terlebih dahulu karena notebook 03 dan 04 membaca output-nya dari `processed/customer_features/`.
+
+---
+
 ## Akses Layanan
 
 | Layanan | Alamat (default) | Kredensial (default) |
@@ -112,12 +187,15 @@ python -m pytest tests/ -v
 | PostgreSQL | `localhost:5432` | `minilab` / `minilab123` |
 | MinIO API | `http://localhost:9000` | — |
 | MinIO Console | `http://localhost:9001` | `minioadmin` / `minioadmin123` |
+| JupyterLab | `http://localhost:8888` | token dari log container |
 
 Nilai pastinya mengikuti `.env` Anda.
 
+---
+
 ## Verifikasi Hasil
 
-**Log eksekusi:**
+**Log eksekusi ingestion:**
 ```bash
 cat logs/ingestion_log.csv
 ```
@@ -133,36 +211,44 @@ docker exec minilab-mc mc cat local/datalake/raw/rdbms/customers/<tanggal>/custo
 
 **MinIO Console:** buka `http://localhost:9001` → bucket `datalake`.
 
-## Struktur Output MinIO
+---
 
-Setiap run ingestion menyimpan ke sub-folder bertanggal agar tidak menimpa data lama:
+## Struktur Output MinIO
 
 ```
 datalake/
-└── raw/
-    ├── rdbms/
-    │   ├── customers/<YYYY-MM-DD>/customers_from_db.csv
-    │   └── orders/<YYYY-MM-DD>/orders_from_db.csv
-    ├── csv/
-    │   └── customers/<YYYY-MM-DD>/customers_from_csv.csv
-    └── xlsx/
-        └── products/<YYYY-MM-DD>/products_from_xlsx.csv
+├── raw/                                  ← Tahap 1 (ingestion)
+│   ├── rdbms/
+│   │   ├── customers/<YYYY-MM-DD>/customers_from_db.csv
+│   │   └── orders/<YYYY-MM-DD>/orders_from_db.csv
+│   ├── csv/
+│   │   └── customers/<YYYY-MM-DD>/customers_from_csv.csv
+│   └── xlsx/
+│       └── products/<YYYY-MM-DD>/products_from_xlsx.csv
+└── processed/                            ← Tahap 2 (analisis)
+    ├── customer_features/                ← output notebook 02
+    ├── customer_clusters/                ← output notebook 03
+    ├── classification_results/           ← output notebook 04
+    └── association_rules/                ← output notebook 05
 ```
 
-Setiap CSV menyertakan kolom tambahan `source_type` dan `ingestion_time`.
+Setiap CSV raw menyertakan kolom tambahan `source_type` dan `ingestion_time`.
+
+---
 
 ## Struktur Proyek
 
 ```
 minilab-bigdata/
-├── compose.yaml                  # Docker Compose
-├── requirements.txt              # Dependensi Python
+├── compose.yaml                  # Docker Compose (profile: analysis untuk Jupyter)
+├── requirements.txt              # Dependensi Python Tahap 1
+├── analysis-requirements.txt     # Dependensi tambahan container Jupyter
 ├── .env.example                  # Template environment variable
 ├── config/
 │   ├── sources.yaml              # Sumber data (RDBMS & file)
 │   └── minio.yaml                # Konfigurasi MinIO
 ├── data/
-│   ├── sample_sql/init.sql       # Inisialisasi PostgreSQL
+│   ├── sample_sql/init.sql       # Inisialisasi PostgreSQL (30 customers, 15 products, 63 orders)
 │   └── input/
 │       ├── csv/customers.csv
 │       └── xlsx/products.xlsx
@@ -174,14 +260,27 @@ minilab-bigdata/
 │   ├── standardizer.py           # Normalisasi kolom + metadata
 │   ├── storage_writer.py         # Upload ke MinIO
 │   └── logger.py                 # Log eksekusi
+├── analysis/
+│   ├── spark_session.py          # SparkSession + konfigurasi S3A ke MinIO
+│   ├── preprocessing.py          # Load data dari MinIO + feature engineering
+│   └── mining/
+│       ├── clustering.py         # K-Means (Spark MLlib)
+│       ├── classification.py     # Decision Tree + evaluasi AUC
+│       └── association.py        # FP-Growth association rules
+├── notebooks/
+│   ├── 01_ingestion_demo.ipynb   # Demo ingestion pipeline
+│   ├── 02_eda_spark.ipynb        # EDA dengan Spark
+│   ├── 03_clustering.ipynb       # K-Means clustering
+│   ├── 04_classification.ipynb   # Decision Tree classification
+│   └── 05_association_rules.ipynb # FP-Growth association rules
 ├── logs/
 │   └── ingestion_log.csv
-├── notebooks/
-│   └── 01_ingestion_demo.ipynb
 └── tests/
     ├── test_validator.py         # 10 unit test validator
-    └── test_standardizer.py     # 8 unit test standardizer
+    └── test_standardizer.py      # 8 unit test standardizer
 ```
+
+---
 
 ## Troubleshooting
 
@@ -201,6 +300,10 @@ docker compose exec -e PGPASSWORD=<password> postgres psql -U minilab -d minilab
 
 Aktifkan virtualenv dan pastikan sudah `pip install -r requirements.txt`.
 
+### `ClassNotFoundException: S3AFileSystem` (di JupyterLab)
+
+JAR hadoop-aws diunduh otomatis saat SparkSession pertama kali dibuat (butuh koneksi internet). Tunggu hingga proses selesai.
+
 ### `KeyError` saat ingestion
 
 Pastikan `.env` sudah ada (salin dari `.env.example`). Pipeline membaca variabel `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` dari file ini.
@@ -209,7 +312,9 @@ Pastikan `.env` sudah ada (salin dari `.env.example`). Pipeline membaca variabel
 
 Ubah variabel port di `.env`, lalu `docker compose down` dan `docker compose up -d`.
 
-## Catatan
+### Notebook tidak bisa dibuka (NotJSONError)
 
-- **Tahap 2 (Spark & Data Mining)** belum dimulai. Dataset yang ada (`customers`, `products`, `orders`) sudah dirancang untuk mendukung klasifikasi, clustering, dan association rules.
-- `.env` tidak di-commit (ada di `.gitignore`). Jika pernah ter-track, jalankan `git rm --cached .env`.
+Biasanya karena conflict marker dari `git merge`. Ambil versi bersih dari server:
+```bash
+git checkout origin/<branch> -- notebooks/<nama_notebook>.ipynb
+```

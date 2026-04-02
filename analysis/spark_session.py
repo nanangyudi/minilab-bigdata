@@ -16,10 +16,14 @@ def create_spark_session(app_name: str = "Minilab Big Data") -> SparkSession:
     access_key = os.environ["MINIO_ROOT_USER"]
     secret_key = os.environ["MINIO_ROOT_PASSWORD"]
 
+    # Tahap 2 (default): local[*] — semua core di mesin yang sama
+    # Tahap 3 (cluster) : spark://spark-master:7077 — set via SPARK_MASTER di .env
+    master = os.environ.get("SPARK_MASTER", "local[*]")
+
     spark = (
         SparkSession.builder
         .appName(app_name)
-        .master("local[*]")
+        .master(master)
         # JAR hadoop-aws + aws-sdk diunduh otomatis dari Maven Central saat pertama kali dijalankan
         .config("spark.jars.packages",
                 "org.apache.hadoop:hadoop-aws:3.3.4,"

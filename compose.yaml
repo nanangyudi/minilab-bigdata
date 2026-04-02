@@ -53,9 +53,10 @@ services:
 
   # ----------------------------------------------------------------
   # Tahap 2 — Analisis (aktif hanya dengan: docker compose --profile analysis up -d)
+  # Tahap 3 — Cluster  (aktif hanya dengan: docker compose --profile cluster up -d)
   # ----------------------------------------------------------------
   jupyter:
-    profiles: ["analysis"]
+    profiles: ["analysis", "cluster"]
     image: jupyter/pyspark-notebook:latest
     container_name: minilab-jupyter
     restart: unless-stopped
@@ -66,6 +67,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_ENDPOINT: "http://minio:9000"
+      # local[*] untuk Tahap 2; spark://spark-master:7077 untuk Tahap 3
+      SPARK_MASTER: ${SPARK_MASTER:-local[*]}
     volumes:
       - .:/home/jovyan/work
     depends_on:
@@ -75,6 +78,39 @@ services:
     command: >
       bash -c "pip install -r /home/jovyan/work/analysis-requirements.txt -q
       && start-notebook.sh"
+
+  # ----------------------------------------------------------------
+  # Tahap 3 — Spark Standalone Cluster
+  # Jalankan dengan: docker compose --profile cluster up -d
+  # Scale worker : docker compose --profile cluster up -d --scale spark-worker=3
+  # ----------------------------------------------------------------
+  spark-master:
+    profiles: ["cluster"]
+    image: bitnami/spark:3.5
+    container_name: minilab-spark-master
+    restart: unless-stopped
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+    ports:
+      - "${SPARK_MASTER_UI_PORT:-8080}:8080"
+      - "${SPARK_MASTER_PORT:-7077}:7077"
+
+  spark-worker:
+    profiles: ["cluster"]
+    image: bitnami/spark:3.5
+    restart: unless-stopped
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+    depends_on:
+      - spark-master
 
 volumes:
   postgres_data:
