@@ -86,7 +86,7 @@ services:
   # ----------------------------------------------------------------
   spark-master:
     profiles: ["cluster"]
-    image: bitnami/spark:3.5
+    image: bitnami/spark:latest
     container_name: minilab-spark-master
     restart: unless-stopped
     environment:
@@ -100,7 +100,7 @@ services:
 
   spark-worker:
     profiles: ["cluster"]
-    image: bitnami/spark:3.5
+    image: bitnami/spark:latest
     restart: unless-stopped
     environment:
       SPARK_MODE: worker
