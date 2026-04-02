@@ -86,29 +86,29 @@ services:
   # ----------------------------------------------------------------
   spark-master:
     profiles: ["cluster"]
-    image: bitnami/spark:latest
+    image: apache/spark:latest
     container_name: minilab-spark-master
     restart: unless-stopped
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     environment:
-      SPARK_MODE: master
       SPARK_MASTER_HOST: spark-master
-      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
-      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_MASTER_PORT: 7077
+      SPARK_MASTER_WEBUI_PORT: 8080
     ports:
       - "${SPARK_MASTER_UI_PORT:-8080}:8080"
       - "${SPARK_MASTER_PORT:-7077}:7077"
 
   spark-worker:
     profiles: ["cluster"]
-    image: bitnami/spark:latest
+    image: apache/spark:latest
     restart: unless-stopped
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
-      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
-      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_WORKER_WEBUI_PORT: 8081
+    ports:
+      - "8081"
     depends_on:
       - spark-master
 
